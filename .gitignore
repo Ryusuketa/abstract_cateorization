@@ -2,4 +2,11 @@ __pycache__/
 *.ipynb
 .DS_Store
 
-./pubmed-rct-master
+pubmed-rct-master/
+glove*
+resources/
+
+.vscode/
+
+data/train_data.csv
+data/test_data.csv
