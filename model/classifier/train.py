@@ -50,14 +50,12 @@ def train(model: nn.Module,
             model.zero_grad()
             loss = 0
             for input, label in zip(input_minibatch, label_minibatch):
-                output = model(label)
-                loss += loss_function(output, input)
+                output = model(input)
+                loss += loss_function(output, label)
 
             loss = loss / minibatch_size
             loss.backward()
             optimizer.update()
-            print(loss)
-
 
 
 def validation(model: nn.Module,

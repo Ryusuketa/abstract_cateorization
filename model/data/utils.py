@@ -20,7 +20,6 @@ def formatting_data(df: pd.DataFrame, token2id: Dict[str, int], section2label: D
     documents = gr['sentense'].apply(lambda sentenses: [[token2id[token] for token in x.split() if token in token2id.keys()] for x in sentenses])
     labels = gr['section'].apply(lambda section_names: [section2label[name] for name in section_names]) 
 
-    print('done')
     return documents, labels
 
 
@@ -39,4 +38,4 @@ def calculate_transition_matrix(df: pd.DataFrame, section2label: Dict[str, int])
 
     transition = np.log(transition / np.sum(transition))
 
-    return transition
+    return transition.T
