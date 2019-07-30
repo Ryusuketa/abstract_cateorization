@@ -7,7 +7,7 @@ from model.classifier.model_conf import SentenceCategoryLabels
 
 
 class MakeSentenceTrainData(gokart.TaskOnKart):
-    pubmed_200k_path = luigi.Parameter(default='pubmed-rct-master/PubMed_200k_RCT_numbers_replaced_with_at_sign/train.txt')
+    pubmed_200k_path = luigi.Parameter(default='localfile/pubmed-rct-master/PubMed_200k_RCT_numbers_replaced_with_at_sign/train.txt')
 
     def output(self):
         return self.make_target('data/pubmed_data.pkl')
@@ -32,7 +32,7 @@ class MakeTransitionMatrix(gokart.TaskOnKart):
 
 
 class PrepareWordEmbedding(gokart.TaskOnKart):
-    embedding_txt = luigi.Parameter('data/glove.6B.200d.txt')
+    embedding_txt = luigi.Parameter('localfile/glove.6B.200d.txt')
 
     def output(self):
         return self.make_target('data/embeddings.pkl')

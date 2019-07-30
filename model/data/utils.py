@@ -1,17 +1,15 @@
 import pandas as pd
 import numpy as np
-import nltk
 from typing import Dict
-import itertools
 import csv
 
 
 def get_glove_vectors(path):
-    df = pd.read_csv(path, sep=' ', header=None, engine='c',
+    df = pd.read_csv(path, sep=' ', header=None, engine='python',
                      quoting=csv.QUOTE_ALL, error_bad_lines=False)
-    token2id = {t:i  for i, t in enumerate(df.iloc[:, 0])}
+    token2id = {t: i for i, t in enumerate(df.iloc[:, 0])}
 
-    return df.iloc[:, 1:].values, token2id 
+    return df.iloc[:, 1:].values, token2id
 
 
 def formatting_data(df: pd.DataFrame, token2id: Dict[str, int], section2label: Dict[str, int]):

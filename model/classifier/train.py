@@ -2,11 +2,11 @@ from typing import List, Callable
 import torch
 from torch import nn
 from torch import optim
+from tqdm import tqdm
 
 import numpy as np
 import pandas as pd
 import gokart
-import luigi
 from functools import partial
 
 from model.classifier.classifier import SentenceClassifier
@@ -27,7 +27,6 @@ def get_optimizer(optimizer_name: str):
 
 def data_to_LongTensor(documents: List[List[List[int]]], labels: List[List[int]]):
     documents = [[torch.LongTensor(token_list) for token_list in sentenses] for sentenses in documents]
-    print('done')
     labels = [torch.LongTensor(label) for label in labels]
 
     return documents, labels
@@ -43,7 +42,7 @@ def train(model: nn.Module,
 
     for _ in range(epoch):
         randperm = np.random.permutation(len(documents))
-        for i in range(len(documents) // minibatch_size):
+        for i in tqdm(range(len(documents) // minibatch_size)):
             input_minibatch = [documents[j] for j in randperm[i * minibatch_size:(i + 1) * minibatch_size]]
             label_minibatch = [labels[j] for j in randperm[i * minibatch_size:(i + 1) * minibatch_size]]
 
@@ -55,7 +54,7 @@ def train(model: nn.Module,
 
             loss = loss / minibatch_size
             loss.backward()
-            optimizer.update()
+            optimizer.step()
 
 
 def validation(model: nn.Module,
@@ -103,7 +102,6 @@ class SentenceClassifierModelTrain(gokart.TaskOnKart):
                                    n_labels=n_labels,
                                    **model_params)
 
-        
         train_params = SentenceClassifierTrainParameters().param_kwargs
         optimizer = get_optimizer(train_params['optimizer'])
         optimizer = optimizer(model.parameters(), train_params['lr'])
@@ -116,4 +114,3 @@ class SentenceClassifierModelTrain(gokart.TaskOnKart):
               minibatch_size=train_params['minibatch_size'])
 
         self.dump(model)
-                                   

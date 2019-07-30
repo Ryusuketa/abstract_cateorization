@@ -10,6 +10,7 @@ torch = "*"
 pandas = "==0.24"
 gokart = "*"
 torchvision = "*"
+nltk = "*"
 
 [requires]
 python_version = "3.6"
