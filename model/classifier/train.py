@@ -10,9 +10,10 @@ import gokart
 from functools import partial
 
 from model.classifier.classifier import SentenceClassifier
-from model.data.utils import formatting_data
-from model.data.make_data import MakeSentenceTrainData, MakeTransitionMatrix, PrepareWordEmbedding
+from model.data.utils import formatting_data, data_to_LongTensor
+from model.data.make_data import MakeSentenceData, MakeTransitionMatrix, PrepareWordEmbedding
 from model.classifier.model_conf import SentenceCategoryLabels, SentenceClassifierModelParameters, SentenceClassifierTrainParameters
+
 
 def get_optimizer(optimizer_name: str):
     if optimizer_name == 'Adam':
@@ -25,19 +26,12 @@ def get_optimizer(optimizer_name: str):
     return optimizer
 
 
-def data_to_LongTensor(documents: List[List[List[int]]], labels: List[List[int]]):
-    documents = [[torch.LongTensor(token_list) for token_list in sentenses] for sentenses in documents]
-    labels = [torch.LongTensor(label) for label in labels]
-
-    return documents, labels
-
-
 def train(model: nn.Module,
           optimizer: optim.Optimizer,
           documents: List[List[torch.LongTensor]],
           labels: List[torch.LongTensor],
           epoch: int,
-          loss_function: nn.Module,
+          loss_function: Callable[[torch.FloatTensor], None],
           minibatch_size: int) -> None:
 
     for _ in range(epoch):
@@ -55,32 +49,26 @@ def train(model: nn.Module,
             loss = loss / minibatch_size
             loss.backward()
             optimizer.step()
-
-
-def validation(model: nn.Module,
-               documents: List[List[int]],
-               dataset: List[List[List[str]]],
-               evaluation: List[Callable[..., None]]) -> None:
-    pass
+            print(loss)
 
 
 class SentenceClassifierModelTrain(gokart.TaskOnKart):
     def requires(self):
-        return dict(data=MakeSentenceTrainData(),
+        return dict(data=MakeSentenceData(),
                     transition=MakeTransitionMatrix(),
                     embedding=PrepareWordEmbedding())
 
     def output(self):
         return self.make_model_target('model/sentence_classifier.zip',
                                       save_function=torch.save,
-                                      load_function=partial(torch.load, map_location='cpu'))
+                                      load_function=partial(torch.load, map_location='cpu'),
+                                      use_unique_id=False)
 
     def run(self):
+        torch.cuda.set_device('cuda:3')
         data = self.load_data_frame('data')
         transition_matrix = self.load('transition')
         dic_embedding = self.load('embedding')
-        
-        transition_matrix = torch.FloatTensor(transition_matrix)
 
         token2id = dic_embedding['token2id']
         embedding = torch.FloatTensor(dic_embedding['embedding'])
@@ -93,7 +81,7 @@ class SentenceClassifierModelTrain(gokart.TaskOnKart):
         n_tokens = embedding.shape[0]
         embed_features = embedding.shape[1]
 
-        transition_matrix = torch.FloatTensor(transition_matrix)
+        transition_matrix = torch.FloatTensor(transition_matrix).cuda()
         model_params = SentenceClassifierModelParameters().param_kwargs
         model = SentenceClassifier(n_tokens=n_tokens,
                                    embed_features=embed_features,
@@ -101,6 +89,7 @@ class SentenceClassifierModelTrain(gokart.TaskOnKart):
                                    pretrain_embedding=embedding,
                                    n_labels=n_labels,
                                    **model_params)
+        model.cuda()
 
         train_params = SentenceClassifierTrainParameters().param_kwargs
         optimizer = get_optimizer(train_params['optimizer'])
@@ -110,7 +99,7 @@ class SentenceClassifierModelTrain(gokart.TaskOnKart):
               documents=documents,
               labels=labels,
               epoch=train_params['epoch'],
-              loss_function=nn.CrossEntropyLoss(),
+              loss_function=model.calc_log_loss,
               minibatch_size=train_params['minibatch_size'])
 
         self.dump(model)

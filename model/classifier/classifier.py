@@ -6,7 +6,7 @@ from typing import List
 
 import torch
 from torch import nn
-from torch.nn.utils.rnn import pad_sequence, pad_packed_sequence, pack_padded_sequence
+from torch.nn.utils.rnn import pad_sequence
 
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
@@ -61,7 +61,30 @@ class SentenceClassifier(nn.Module):
 
         return output
 
-    def _calc_viterbi(self, prob_features):
+    @staticmethod
+    def log_sum_exp(tensor):
+        max_value = torch.max(tensor)
+        return max_value + torch.log(torch.sum(torch.exp(tensor - max_value), dim=1, keepdim=True))
+
+    def _forward_denom(self, prob_features):
+        forward_sequence = prob_features[0:1, :]
+
+        for n in range(1, prob_features.shape[0]):
+            current_prob_expand = prob_features[n:n + 1, :].expand(self.n_labels, self.n_labels).t()
+            forward_expand = forward_sequence.expand(self.n_labels, self.n_labels)
+            prob = current_prob_expand + self.transition_matrix + forward_expand
+            forward_sequence = self.log_sum_exp(prob).t()
+
+        return self.log_sum_exp(forward_sequence.squeeze())
+
+    def _sequence_score(self, prob_features, label_seq):
+        score = prob_features[0, label_seq[0]]
+        for n in len(label_seq):
+            score += prob_features[n, label_seq[n]] + self.transition_matrix[label_seq[n - 1], label_seq[n]]
+
+        return score
+
+    def _viterbi_decode(self, prob_features):
         prob_sequence = [prob_features[0:1, :]]
         for n in range(1, prob_features.shape[0]):
             prob = prob_features[n:n + 1, :] + self.transition_matrix + prob_sequence[n - 1]
@@ -69,6 +92,12 @@ class SentenceClassifier(nn.Module):
             prob_sequence += [max_prob.t()]
 
         return torch.cat(prob_sequence, dim=0)
+
+    def calc_log_loss(self, prob_features, label_seq):
+        denom = self._forward_denom(prob_features)
+        score = self._sequence_score(prob_features, label_seq)
+
+        return -(score - denom)
 
     def forward(self, tokens):
         embedded = [self.embedding(t) for t in tokens]
@@ -78,7 +107,7 @@ class SentenceClassifier(nn.Module):
         prob_features = self.linear(torch.squeeze(encoded))
         probabilities = self._calc_viterbi(prob_features)
 
-        return probabilities 
+        return probabilities
 
     def predict(self, tokens):
         probabilities = self.forward(tokens)

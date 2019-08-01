@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
-from typing import Dict
+from typing import Dict, List
 import csv
+
+import torch
 
 
 def get_glove_vectors(path):
@@ -37,3 +39,10 @@ def calculate_transition_matrix(df: pd.DataFrame, section2label: Dict[str, int])
     transition = np.log(transition / np.sum(transition))
 
     return transition.T
+
+
+def data_to_LongTensor(documents: List[List[List[int]]], labels: List[List[int]]):
+    documents = [[torch.LongTensor(token_list).cuda() for token_list in sentenses] for sentenses in documents]
+    labels = [torch.LongTensor(label).cuda() for label in labels]
+
+    return documents, labels
