@@ -75,7 +75,7 @@ class SentenceClassifier(nn.Module):
             prob = current_prob_expand + self.transition_matrix + forward_expand
             forward_sequence = self.log_sum_exp(prob).t()
 
-        return self.log_sum_exp(forward_sequence.squeeze())
+        return self.log_sum_exp(forward_sequence).squeeze()
 
     def _sequence_score(self, prob_features, label_seq):
         score = prob_features[0, label_seq[0]]
@@ -111,4 +111,4 @@ class SentenceClassifier(nn.Module):
     def predict(self, tokens):
         prob_features = self.forward(tokens)
 
-        return self._viterbi_decode(probabilities)
+        return self._viterbi_decode(prob_features)

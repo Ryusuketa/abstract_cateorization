@@ -36,20 +36,24 @@ def train(model: nn.Module,
 
     for _ in range(epoch):
         randperm = np.random.permutation(len(documents))
+        softmax = nn.CrossEntropyLoss()
         for i in tqdm(range(len(documents) // minibatch_size)):
             input_minibatch = [documents[j] for j in randperm[i * minibatch_size:(i + 1) * minibatch_size]]
             label_minibatch = [labels[j] for j in randperm[i * minibatch_size:(i + 1) * minibatch_size]]
 
             model.zero_grad()
             loss = 0
+            ce = 0
             for input, label in zip(input_minibatch, label_minibatch):
                 output = model(input)
                 loss += loss_function(output, label)
+                ce += softmax(output, label)
 
             loss = loss / minibatch_size
             loss.backward()
             optimizer.step()
-            print(loss)
+            print('cost_func:', loss)
+            print('cross entropy:', ce / minibatch_size)
 
 
 class SentenceClassifierModelTrain(gokart.TaskOnKart):
