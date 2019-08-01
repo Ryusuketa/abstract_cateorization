@@ -107,13 +107,8 @@ class SentenceClassifier(nn.Module):
 
     def _sequence_score(self, prob_features, label_seq):
         score = prob_features[0, label_seq[0]]
-<<<<<<< HEAD
-        for n in range(len(1, label_seq)):
-            score += prob_features[n, label_seq[n]] + self.transition_matrix[label_seq[n], label_seq[n]]
-=======
         for n in range(1, len(label_seq)):
-            score += prob_features[n, label_seq[n]] + self.transition_matrix[label_seq[n - 1], label_seq[n]]
->>>>>>> adb73a5fd920284bbe11c19e196431deb6463889
+            score += prob_features[n, label_seq[n]] + self.transition_matrix[label_seq[n], label_seq[n - 1]]
 
         return score
 
