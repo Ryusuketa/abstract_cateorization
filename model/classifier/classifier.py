@@ -105,11 +105,10 @@ class SentenceClassifier(nn.Module):
         encoded = self.attention(encoded)
         encoded = self._lstm_forward(self.sentence_lstm, encoded)
         prob_features = self.linear(torch.squeeze(encoded))
-        probabilities = self._calc_viterbi(prob_features)
 
-        return probabilities
+        return prob_features
 
     def predict(self, tokens):
-        probabilities = self.forward(tokens)
+        prob_features = self.forward(tokens)
 
-        return F.softmax(probabilities, dim=1)
+        return self._viterbi_decode(probabilities)
