@@ -66,6 +66,34 @@ class SentenceClassifier(nn.Module):
         max_value = torch.max(tensor)
         return max_value + torch.log(torch.sum(torch.exp(tensor - max_value), dim=1, keepdim=True))
 
+    def _forward_alg(self, prob_features):
+        # Do the forward algorithm to compute the partition function
+
+        # Wrap in a variable so that we will get automatic backprop
+        forward_var = prob_features[0, :]
+
+        # Iterate through the sentence
+        for feat in prob_features:
+            alphas_t = []  # The forward tensors at this timestep
+            for next_tag in range(self.n_labels):
+                # broadcast the emission score: it is the same regardless of
+                # the previous tag
+                emit_score = feat[next_tag].view(
+                    1, -1).expand(1, self.n_labels)
+                # the ith entry of trans_score is the score of transitioning to
+                # next_tag from i
+                trans_score = self.transition_matrix[next_tag].view(1, -1)
+                # The ith entry of next_tag_var is the value for the
+                # edge (i -> next_tag) before we do log-sum-exp
+                next_tag_var = forward_var + trans_score + emit_score
+                # The forward variable for this tag is log-sum-exp of all the
+                # scores.
+                alphas_t.append(self.log_sum_exp(next_tag_var).view(1))
+            forward_var = torch.cat(alphas_t).view(1, -1)
+
+        alpha = self.log_sum_exp(forward_var)
+        return alpha
+
     def _forward_denom(self, prob_features):
         forward_sequence = prob_features[0:1, :]
 
@@ -80,7 +108,7 @@ class SentenceClassifier(nn.Module):
     def _sequence_score(self, prob_features, label_seq):
         score = prob_features[0, label_seq[0]]
         for n in range(len(1, label_seq)):
-            score += prob_features[n, label_seq[n]] + self.transition_matrix[label_seq[n - 1], label_seq[n]]
+            score += prob_features[n, label_seq[n]] + self.transition_matrix[label_seq[n], label_seq[n]]
 
         return score
 
@@ -94,7 +122,7 @@ class SentenceClassifier(nn.Module):
         return torch.cat(prob_sequence, dim=0)
 
     def calc_log_loss(self, prob_features, label_seq):
-        denom = self._forward_denom(prob_features)
+        denom = self._forward_alg(prob_features)
         score = self._sequence_score(prob_features, label_seq)
 
         return -(score - denom)
