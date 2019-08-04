@@ -32,7 +32,7 @@ def get_token_layer(model_type: str, encoded_features: int, pretrained_embedding
         return LSTMTokenLayer(encoded_features, pretrained_embedding)
     if model_type == 'bert':
         bert = BertModel.from_pretrained('bert-base-uncased')
-        for parameter in bert:
+        for parameter in bert.parameters():
             parameter.requires_grad = False
         return bert
 
@@ -77,6 +77,8 @@ class SentenceClassifier(nn.Module):
         self.sentence_lstm = nn.LSTM(feature_size * attention_hop, encoded_features, batch_first=True, bidirectional=True)
         self.attention = MultiHeadAttention(feature_size, attention_features, attention_hop)
         self.linear = nn.Linear(feature_size, n_labels)
+        self.linear_back = nn.Linear(feature_size, n_labels)
+        self.linear_for = nn.Linear(feature_size, n_labels)
         self.loss = nn.CrossEntropyLoss()
 
         self.transition_matrix = transition_matrix
