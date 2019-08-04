@@ -76,9 +76,9 @@ class SentenceClassifier(nn.Module):
         feature_size = self.token_layer(torch.LongTensor([[1]]))[0].shape[-1]
         self.sentence_lstm = nn.LSTM(feature_size * attention_hop, encoded_features, batch_first=True, bidirectional=True)
         self.attention = MultiHeadAttention(feature_size, attention_features, attention_hop)
-        self.linear = nn.Linear(feature_size, n_labels)
-        self.linear_back = nn.Linear(feature_size, n_labels)
-        self.linear_for = nn.Linear(feature_size, n_labels)
+        self.linear = nn.Linear(encoded_features * 2, n_labels)
+        self.linear_back = nn.Linear(encoded_features * 2, n_labels)
+        self.linear_for = nn.Linear(encoded_features * 2, n_labels)
         self.loss = nn.CrossEntropyLoss()
 
         self.transition_matrix = transition_matrix
@@ -163,11 +163,14 @@ class SentenceClassifier(nn.Module):
         encoded = self._lstm_forward(self.token_layer, tokens)
         encoded = self.attention(encoded)
         encoded = self.sentence_lstm(encoded)[0].squeeze()
+        encoded = F.relu(encoded)
+        back_features = self.linear_back(encoded)
         prob_features = self.linear(encoded)
+        for_features = self.linear_for(encoded)
 
-        return prob_features
+        return back_features, prob_features, for_features
 
     def predict(self, tokens):
-        prob_features = self.forward(tokens)
+        _, prob_features, _ = self.forward(tokens)
 
         return self._viterbi_decode(prob_features)

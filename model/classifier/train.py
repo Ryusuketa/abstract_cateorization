@@ -58,17 +58,21 @@ def train(model: nn.Module,
 
             model.zero_grad()
             loss = 0
-            ce = 0
+            ce_output = 0
+            ce_back = 0
+            ce_for = 0
             for input, label in zip(input_minibatch, label_minibatch):
-                output = model(input)
+                back_prob, output, for_prob = model(input)
                 loss += loss_function(output, label)
-                ce += softmax(output, label)
+                ce_output += softmax(output, label)
+                ce_back += softmax(back_prob[1:], label[:-1])
+                ce_for += softmax(for_prob[:-1], label[1:])
 
-            loss = loss / minibatch_size
-            loss.backward()
+            loss_total = (loss + ce_output + ce_back + ce_for) / minibatch_size
+            loss_total.backward()
             optimizer.step()
             print('cost_func:', loss)
-            print('cross entropy:', ce / minibatch_size)
+            print('cross entropy:', ce_output / minibatch_size)
 
 
 class SentenceClassifierModelTrain(gokart.TaskOnKart):
