@@ -33,7 +33,7 @@ def get_token_layer(model_type: str, encoded_features: int, pretrained_embedding
     if model_type == 'bert':
         bert = BertModel.from_pretrained('bert-base-uncased')
         for parameter in bert:
-            parameter.require_grad = False
+            parameter.requires_grad = False
         return bert
 
 
