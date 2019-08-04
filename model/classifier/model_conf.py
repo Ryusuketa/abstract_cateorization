@@ -15,6 +15,12 @@ class SentenceClassifierTrainParameters(luigi.Config):
     optimizer = luigi.Parameter()
 
 
+class TokenLayerConfig(luigi.Config):
+    tokenizer = luigi.Parameter()
+    token_layer = luigi.Parameter()
+    embedding_path = luigi.Parameter()
+
+
 class SentenceCategoryLabels(luigi.Config):
     section2label = luigi.DictParameter(default=dict(background=0,
                                                      objective=0,

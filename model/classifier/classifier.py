@@ -6,12 +6,36 @@ from typing import List
 
 import torch
 from torch import nn
-from torch.nn.utils.rnn import pad_sequence
+from torch.nn.utils.rnn import pad_sequence, pad_packed_sequence, pack_padded_sequence
 
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 
 from pytorch_transformers import BertModel, BertTokenizer
+
+
+class LSTMTokenLayer(nn.Module):
+    def __init__(self, encoded_features: int, pretrained_embedding: torch.FloatTensor):
+        super(LSTMTokenLayer, self).__init__()
+        self.embedding = nn.Embedding(*(pretrained_embedding.shape))
+        self.embedding.weight.data.copy_(pretrained_embedding)
+
+        self.lstm = nn.LSTM(pretrained_embedding.shape[1], encoded_features, batch_first=True, bidirectional=True)
+
+    def forward(self, tokens):
+        embedded = self.embedding(tokens)
+        return self.lstm(embedded)
+
+
+def get_token_layer(model_type: str, encoded_features: int, pretrained_embedding: torch.FloatTensor = None):
+    if model_type == 'lstm':
+        return LSTMTokenLayer(encoded_features, pretrained_embedding)
+    if model_type == 'bert':
+        bert = BertModel.from_pretrained('bert-base-uncased')
+        for parameter in bert:
+            parameter.require_grad = False
+        return bert
+
 
 class MultiHeadAttention(nn.Linear):
     def __init__(self, in_features, out_features, attention_hop, bias=True):
@@ -20,13 +44,19 @@ class MultiHeadAttention(nn.Linear):
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, input):
-        hidden = torch.matmul(input, self.weight.transpose(0, 1)) + self.bias
+        sentences = torch.cat([self._forward(sequence) for sequence in input], dim=0).unsqueeze(0)
+
+        return sentences
+
+    def _forward(self, sequence):
+        hidden = torch.matmul(sequence, self.weight.transpose(0, 1)) + self.bias
         hidden = torch.matmul(hidden, self.context_matrix.transpose(0, 1))
         attention = self.softmax(hidden)
-        sentence = torch.matmul(input.transpose(1, 2), attention)
-        sentence = sentence.view(1, -1, np.prod(sentence.shape[1:]))
+        sentence = torch.matmul(sequence.transpose(0, 1), attention)
+        sentence = sentence.view(1, np.prod(sentence.shape))
 
         return sentence
+
 
 
 class SentenceClassifier(nn.Module):
@@ -39,30 +69,25 @@ class SentenceClassifier(nn.Module):
                  n_labels: int,
                  dropout_rate: float,
                  transition_matrix: torch.FloatTensor,
-                 pretrain_embedding: torch.FloatTensor)
+                 pretrain_embedding: torch.FloatTensor,
+                 token_layer: str):
         super(SentenceClassifier, self).__init__()
-        self.embedding = nn.Embedding(n_tokens, embed_features)
-        self.initialize_embedding(pretrain_embedding)
-        self.token_lstm = nn.LSTM(embed_features, encoded_features, batch_first=True, dropout=dropout_rate, bidirectional=True)
-        self.sentence_lstm = nn.LSTM(encoded_features * attention_hop, encoded_features, batch_first=True, dropout=dropout_rate, bidirectional=True)
-        self.attention = MultiHeadAttention(encoded_features, attention_features, attention_hop)
-        self.linear = nn.Linear(encoded_features, n_labels)
+        self.token_layer = get_token_layer(token_layer, encoded_features, pretrain_embedding)
+        feature_size = self.token_layer(torch.LongTensor([[1]]))[0].shape[-1]
+        self.sentence_lstm = nn.LSTM(feature_size * attention_hop, encoded_features, batch_first=True, bidirectional=True)
+        self.attention = MultiHeadAttention(feature_size, attention_features, attention_hop)
+        self.linear = nn.Linear(feature_size, n_labels)
         self.loss = nn.CrossEntropyLoss()
-        self.bert = BertModel.from_pretrained('bert-base-uncased')
-        for parameter in self.bert:
-            parameter.require_grads = False
 
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
         self.transition_matrix = transition_matrix
         self.n_labels = n_labels
 
-    def initialize_embedding(self, pretrain_embedding):
-        self.embedding.weight.data.copy_(pretrain_embedding)
 
     def _lstm_forward(self, lstm_layer, embedded):
+        lengths = [len(tokens) for i, tokens in enumerate(embedded)]
         padded = pad_sequence(embedded, batch_first=True)
         output, _ = lstm_layer(padded)
-        output = output[:, :, :output.shape[-1] // 2] + output[:, :, output.shape[-1] // 2:]
+        output = [output[i, :l, :] for i, l in enumerate(lengths)]
 
         return output
 
@@ -127,17 +152,16 @@ class SentenceClassifier(nn.Module):
         return torch.cat(prob_sequence, dim=0)
 
     def calc_log_loss(self, prob_features, label_seq):
-        denom = self._forward_alg(prob_features)
+        denom = self._forward_denom(prob_features)
         score = self._sequence_score(prob_features, label_seq)
 
         return -(score - denom)
 
     def forward(self, tokens):
-        embedded = [self.embedding(t) for t in tokens]
-        encoded = self._lstm_forward(self.token_lstm, embedded)
+        encoded = self._lstm_forward(self.token_layer, tokens)
         encoded = self.attention(encoded)
-        encoded = self._lstm_forward(self.sentence_lstm, encoded)
-        prob_features = self.linear(torch.squeeze(encoded))
+        encoded = self.sentence_lstm(encoded)[0].squeeze()
+        prob_features = self.linear(encoded)
 
         return prob_features
 

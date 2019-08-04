@@ -1,23 +1,23 @@
 import pandas as pd
 import numpy as np
-from typing import Dict, List
+from typing import Dict, List, Callable
 import csv
 
 import torch
 
 
 def get_glove_vectors(path):
-    df = pd.read_csv(path, sep=' ', header=None, engine='python',
+    df = pd.read_csv(path, sep=' ', header=None, engine='c',
                      quoting=csv.QUOTE_ALL, error_bad_lines=False)
     token2id = {t: i for i, t in enumerate(df.iloc[:, 0])}
 
     return df.iloc[:, 1:].values, token2id
 
 
-def formatting_data(df: pd.DataFrame, token2id: Dict[str, int], section2label: Dict[str, int]):
+def formatting_data(df: pd.DataFrame, tokenizer: Callable[[str], None], section2label: Dict[str, int]):
     # ToDo: completion of out-of-vocabulary
     gr = df.groupby('paper_id')
-    documents = gr['sentense'].apply(lambda sentenses: [[token2id[token] for token in x.split() if token in token2id.keys()] for x in sentenses])
+    documents = gr['sentense'].apply(lambda sentenses: [tokenizer.encode(x) for x in sentenses])
     labels = gr['section'].apply(lambda section_names: [section2label[name] for name in section_names]) 
 
     return documents, labels
@@ -42,7 +42,7 @@ def calculate_transition_matrix(df: pd.DataFrame, section2label: Dict[str, int])
 
 
 def data_to_LongTensor(documents: List[List[List[int]]], labels: List[List[int]]):
-    documents = [[torch.LongTensor(token_list).cuda() for token_list in sentenses] for sentenses in documents]
-    labels = [torch.LongTensor(label).cuda() for label in labels]
+    documents = [[torch.LongTensor(token_list) for token_list in sentenses] for sentenses in documents]
+    labels = [torch.LongTensor(label) for label in labels]
 
     return documents, labels
