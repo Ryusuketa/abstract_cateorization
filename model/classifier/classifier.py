@@ -11,6 +11,7 @@ from torch.nn.utils.rnn import pad_sequence
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 
+from pytorch_transformers import BertModel, BertTokenizer
 
 class MultiHeadAttention(nn.Linear):
     def __init__(self, in_features, out_features, attention_hop, bias=True):
@@ -38,7 +39,7 @@ class SentenceClassifier(nn.Module):
                  n_labels: int,
                  dropout_rate: float,
                  transition_matrix: torch.FloatTensor,
-                 pretrain_embedding: torch.FloatTensor):
+                 pretrain_embedding: torch.FloatTensor)
         super(SentenceClassifier, self).__init__()
         self.embedding = nn.Embedding(n_tokens, embed_features)
         self.initialize_embedding(pretrain_embedding)
@@ -47,7 +48,11 @@ class SentenceClassifier(nn.Module):
         self.attention = MultiHeadAttention(encoded_features, attention_features, attention_hop)
         self.linear = nn.Linear(encoded_features, n_labels)
         self.loss = nn.CrossEntropyLoss()
+        self.bert = BertModel.from_pretrained('bert-base-uncased')
+        for parameter in self.bert:
+            parameter.require_grads = False
 
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
         self.transition_matrix = transition_matrix
         self.n_labels = n_labels
 
