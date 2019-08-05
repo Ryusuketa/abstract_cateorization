@@ -1,4 +1,3 @@
-from nltk import SpaceTokenizer
 from typing import Dict
 
 import luigi

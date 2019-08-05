@@ -74,11 +74,11 @@ class SentenceClassifier(nn.Module):
         super(SentenceClassifier, self).__init__()
         self.token_layer = get_token_layer(token_layer, encoded_features, pretrain_embedding)
         feature_size = self.token_layer(torch.LongTensor([[1]]))[0].shape[-1]
-        self.sentence_lstm = nn.LSTM(feature_size * attention_hop, encoded_features, batch_first=True, bidirectional=True)
+        self.sentence_lstm = nn.LSTM(feature_size * attention_hop, encoded_features, num_layers=2, batch_first=True, bidirectional=True)
         self.attention = MultiHeadAttention(feature_size, attention_features, attention_hop)
-        self.linear = nn.Linear(encoded_features * 2, n_labels)
-        self.linear_back = nn.Linear(encoded_features * 2, n_labels)
-        self.linear_for = nn.Linear(encoded_features * 2, n_labels)
+        self.linear = nn.Sequential(nn.Linear(encoded_features * 2, encoded_features * 2), nn.ReLU(), nn.Linear(encoded_features * 2, n_labels))
+        self.linear_back = nn.Sequential(nn.Linear(encoded_features * 2, encoded_features * 2), nn.ReLU(), nn.Linear(encoded_features * 2, n_labels))
+        self.linear_for = nn.Sequential(nn.Linear(encoded_features * 2, encoded_features * 2), nn.ReLU(), nn.Linear(encoded_features * 2, n_labels))
         self.loss = nn.CrossEntropyLoss()
 
         self.transition_matrix = transition_matrix

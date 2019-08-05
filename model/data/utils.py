@@ -42,7 +42,7 @@ def calculate_transition_matrix(df: pd.DataFrame, section2label: Dict[str, int])
 
 
 def data_to_LongTensor(documents: List[List[List[int]]], labels: List[List[int]]):
-    documents = [[torch.LongTensor(token_list) for token_list in sentenses] for sentenses in documents]
-    labels = [torch.LongTensor(label) for label in labels]
+    documents = [[torch.LongTensor(token_list).cuda() for token_list in sentenses] for sentenses in documents]
+    labels = [torch.LongTensor(label).cuda() for label in labels]
 
     return documents, labels

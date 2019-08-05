@@ -5,11 +5,13 @@ import gokart
 import pandas as pd
 from torch import nn
 import torch
+import numpy as np
 
-from model.train import SentenceClassifierModelTrain
+from model.classifier.train import SentenceClassifierModelTrain
 from model.data.make_data import MakeSentenceData, PrepareWordEmbedding
 from model.data.utils import formatting_data, data_to_LongTensor
-from model.classifier.model_conf import SentenceCategoryLabels
+from model.classifier.model_conf import SentenceCategoryLabels, TokenLayerConfig
+from model.classifier.train import get_tokenizer
 
 
 def validation(model: nn.Module,
@@ -22,7 +24,7 @@ def validation(model: nn.Module,
 class ModelValidation(gokart.TaskOnKart):
     def requires(self):
         return dict(model=SentenceClassifierModelTrain(),
-                    validation_data=MakeSentenceData('localfile/pubmed-rct-master/PubMed_200k_RCT_numbers_replaced_with_at_sign/test.txt'),
+                    validation_data=MakeSentenceData(pubmed_rct_path='localfile/pubmed-rct-master/PubMed_200k_RCT_numbers_replaced_with_at_sign/test.txt'),
                     embedding=PrepareWordEmbedding())
 
     def output(self):
@@ -30,22 +32,30 @@ class ModelValidation(gokart.TaskOnKart):
 
     def run(self):
         model = self.load('model')
+        model.cuda()
+        model.transition_matrix = model.transition_matrix.cuda()
         validation_data = self.load('validation_data')
         token2id = self.load('embedding')['token2id']
         section2label = SentenceCategoryLabels().section2label
+        token_layer_config = TokenLayerConfig()
 
-        result = self._validation(model, validation_data, section2label, token2id)
-        self.dump(result)
+        tokenizer = get_tokenizer(token_layer_config)
+        df = self._validation(model, validation_data, section2label, tokenizer)
+        print(np.mean([p == t for predicted, true in zip(df['predicted'], df['ground_truth']) for p, t in zip(predicted, true)]))
+        self.dump(df)
 
-    def _validation(self, model, validation_data, section2label, token2id):
+    def _validation(self, model, validation_data, section2label, tokenizer):
         paper_id = validation_data['paper_id'].unique()
-        documents, labels = formatting_data(validation_data, token2id, section2label)
+        documents, labels = formatting_data(validation_data, tokenizer, section2label)
         documents, labels = data_to_LongTensor(documents, labels)
 
         predicted_labels = []
 
         for document in documents:
-            p = list(model(document).data.cpu().numpy())
-            predicted_labels.append(p)
+            p = model.predict(document).data.cpu().numpy()
+            p = np.argmax(p, axis=1)
+            predicted_labels.append(list(p))
+
+        labels = [list(l.cpu().numpy()) for l in labels]
 
         return pd.DataFrame(dict(paper_id=paper_id, ground_truth=labels, predicted=predicted_labels))

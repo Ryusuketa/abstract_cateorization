@@ -71,7 +71,7 @@ def train(model: nn.Module,
             loss_total = (loss + ce_output + ce_back + ce_for) / minibatch_size
             loss_total.backward()
             optimizer.step()
-            print('cost_func:', loss)
+            print('cost_func:', loss / minibatch_size)
             print('cross entropy:', ce_output / minibatch_size)
 
 
@@ -88,6 +88,7 @@ class SentenceClassifierModelTrain(gokart.TaskOnKart):
                                       use_unique_id=False)
 
     def run(self):
+        torch.cuda.set_device(0)
         data = self.load_data_frame('data')
         transition_matrix = self.load('transition')
         dic_embedding = self.load('embedding')
@@ -105,7 +106,7 @@ class SentenceClassifierModelTrain(gokart.TaskOnKart):
         n_tokens = embedding.shape[0]
         embed_features = embedding.shape[1]
 
-        transition_matrix = torch.FloatTensor(transition_matrix)
+        transition_matrix = torch.FloatTensor(transition_matrix).cuda()
         model_params = SentenceClassifierModelParameters().param_kwargs
         model = SentenceClassifier(n_tokens=n_tokens,
                                    embed_features=embed_features,
@@ -114,6 +115,8 @@ class SentenceClassifierModelTrain(gokart.TaskOnKart):
                                    n_labels=n_labels,
                                    token_layer=token_layer_config.token_layer,
                                    **model_params)
+
+        model.cuda()
 
         train_params = SentenceClassifierTrainParameters().param_kwargs
         optimizer = get_optimizer(train_params['optimizer'])
