@@ -6,6 +6,7 @@ import pandas as pd
 from torch import nn
 import torch
 import numpy as np
+import itertools
 
 from model.classifier.train import SentenceClassifierModelTrain
 from model.data.make_data import MakeSentenceData, PrepareWordEmbedding
@@ -35,17 +36,16 @@ class ModelValidation(gokart.TaskOnKart):
         model.cuda()
         model.transition_matrix = model.transition_matrix.cuda()
         validation_data = self.load('validation_data')
-        token2id = self.load('embedding')['token2id']
         section2label = SentenceCategoryLabels().section2label
         token_layer_config = TokenLayerConfig()
 
         tokenizer = get_tokenizer(token_layer_config)
         df = self._validation(model, validation_data, section2label, tokenizer)
-        print(np.mean([p == t for predicted, true in zip(df['predicted'], df['ground_truth']) for p, t in zip(predicted, true)]))
+        print(np.mean([p == t for t, p in zip(df['ground_truth'],df['predicted'])]))
         self.dump(df)
 
     def _validation(self, model, validation_data, section2label, tokenizer):
-        paper_id = validation_data['paper_id'].unique()
+        df = validation_data.copy()
         documents, labels = formatting_data(validation_data, tokenizer, section2label)
         documents, labels = data_to_LongTensor(documents, labels)
 
@@ -56,6 +56,10 @@ class ModelValidation(gokart.TaskOnKart):
             p = np.argmax(p, axis=1)
             predicted_labels.append(list(p))
 
-        labels = [list(l.cpu().numpy()) for l in labels]
+        predicted_labels = itertools.chain.from_iterable(predicted_labels)
 
-        return pd.DataFrame(dict(paper_id=paper_id, ground_truth=labels, predicted=predicted_labels))
+        labels = itertools.chain.from_iterable([list(l.cpu().numpy()) for l in labels])
+        df['ground_truth'] = labels
+        df['predicted'] = predicted_labels
+
+        return df

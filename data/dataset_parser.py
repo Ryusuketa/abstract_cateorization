@@ -24,7 +24,7 @@ def parse_dataset(path: str):
     section_sent_position = [line[3] for line in texts_line]
     documents = pd.DataFrame(dict(paper_id=text_id, sentense=section_sentense, section=section_names, position=section_sent_position))
 
-    return documents 
+    return documents
 
 
 if __name__ == '__main__':
